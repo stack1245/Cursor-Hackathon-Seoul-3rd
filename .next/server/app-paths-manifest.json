@@ -1,0 +1,6 @@
+{
+  "/workspace/page": "app/workspace/page.js",
+  "/api/repository/analyze/route": "app/api/repository/analyze/route.js",
+  "/api/workspace/questions/route": "app/api/workspace/questions/route.js",
+  "/api/onboarding/route": "app/api/onboarding/route.js"
+}
