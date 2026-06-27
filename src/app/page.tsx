@@ -7,20 +7,23 @@ const teamMembers = [
   {
     name: "정진우",
     role: "팀장",
+    image: "/images/team/team-leader.png",
     description:
-      ""
+      "안녕하세요, 제조업 품질 엔지니어로 근무중인 정진우입니다."
   },
   {
     name: "탁도형",
     role: "팀원1",
+    image: "/images/team/team-member-1.png",
     description:
-      ""
+      "선린인터넷고등학교에 재학중인 1학년 탁도형입니다. 정보보안·개발·네트워킹을 주전공으로 두고있습니다."
   },
   {
     name: "이예빈",
     role: "팀원2",
+    image: "/images/team/team-member-2.png",
     description:
-      ""
+      "안녕하세요, 충남대학교 인공지능학과에 재학중인 이예빈입니다."
   }
 ];
 
@@ -117,8 +120,14 @@ export default function Home() {
                 }}
                 className="group rounded-2xl border border-white/10 bg-white/[0.03] p-6 shadow-glass backdrop-blur-sm transition-colors hover:border-white/30"
               >
-                <div className="mb-5 h-40 overflow-hidden rounded-xl border border-white/10 bg-[linear-gradient(145deg,rgba(255,255,255,0.11),rgba(255,255,255,0.02))]">
-                  <div className="h-full w-full bg-[radial-gradient(circle_at_20%_20%,rgba(255,255,255,0.2),transparent_55%),linear-gradient(135deg,transparent_40%,rgba(255,255,255,0.08)_50%,transparent_70%)] transition-transform duration-500 group-hover:scale-105" />
+                <div className="relative mb-5 h-52 overflow-hidden rounded-xl border border-white/10 bg-[linear-gradient(145deg,rgba(255,255,255,0.11),rgba(255,255,255,0.02))]">
+                  <Image
+                    src={member.image}
+                    alt={`${member.role} 프로필`}
+                    fill
+                    sizes="(max-width: 768px) 100vw, (max-width: 1280px) 50vw, 33vw"
+                    className="object-cover object-center transition-transform duration-500 group-hover:scale-105"
+                  />
                 </div>
                 <h3 className="text-xl font-semibold tracking-wide text-zinc-100">
                   {member.name}
