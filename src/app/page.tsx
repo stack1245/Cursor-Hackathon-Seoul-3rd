@@ -79,7 +79,7 @@ export default function Home() {
               </span>
             </div>
             <a
-              href="#team"
+              href="/workspace"
               className="text-sm font-medium tracking-[0.18em] text-zinc-300 transition-colors hover:text-white"
             >
               워크스페이스
