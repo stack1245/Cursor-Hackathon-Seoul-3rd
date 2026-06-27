@@ -1,0 +1,58 @@
+{
+  // Cursor Hackathon Seoul 3rd — Auto-review policy
+  // Repo: https://github.com/stack1245/Cursor-Hackathon-Seoul-3rd
+  "approvalMode": "allowlist",
+
+  "terminalAllowlist": [
+    "npm install",
+    "npm ci",
+    "npm run dev",
+    "npm run build",
+    "npm run start",
+    "npm run lint",
+    "npm run test",
+    "npm run typecheck",
+    "pnpm install",
+    "pnpm dev",
+    "pnpm build",
+    "pnpm lint",
+    "pnpm test",
+    "yarn install",
+    "yarn dev",
+    "yarn build",
+    "npx create-next-app",
+    "npx create-vite",
+    "npx shadcn",
+    "python -m venv",
+    "pip install",
+    "python -m pytest",
+    "git status",
+    "git diff",
+    "git log",
+    "git branch",
+    "git add",
+    "git commit",
+    "git checkout",
+    "git switch",
+    "git pull",
+    "git fetch",
+    "git merge",
+    "git rebase"
+  ],
+
+  "autoReview": {
+    "allow_instructions": [
+      "Cursor Hackathon Seoul 3rd 프로젝트: 로컬 개발 서버, 린트, 테스트, 타입체크, 빌드는 자동 실행",
+      "파일 읽기/검색/목록 조회, 의존성 설치(npm/pnpm/pip), git status/diff/log/add/commit/checkout/pull/fetch/merge는 자동 실행",
+      "feat/* 또는 dev 브랜치에서의 작업은 자동 실행. main 직접 수정은 피할 것",
+      "서울 열린데이터광장(data.seoul.go.kr) 및 공공 API 조회용 curl/fetch는 자동 실행",
+      "데모용 mock 데이터 생성, UI/프론트엔드 작업, README/문서 수정은 자동 실행"
+    ],
+    "block_instructions": [
+      "git push, git force push, git reset --hard, git clean -fd는 반드시 승인 필요",
+      "rm -rf, del /f /s, format 같은 파괴적 명령은 반드시 차단",
+      ".env, API key, credentials, secrets 파일 읽기/쓰기는 반드시 승인 필요",
+      "프로덕션 DB/서버 변경, 배포(publish), 결제/결제키 관련 작업은 반드시 승인 필요"
+    ]
+  }
+}

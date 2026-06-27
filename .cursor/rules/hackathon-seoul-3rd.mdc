@@ -1,0 +1,36 @@
+---
+description: Cursor Hackathon Seoul 3rd project context
+alwaysApply: true
+---
+
+# Cursor Hackathon Seoul 3rd
+
+- GitHub: https://github.com/stack1245/Cursor-Hackathon-Seoul-3rd
+- Theme: vibe coding with Cursor; build a working AI/public-data product in one day
+- Bonus track: use Seoul Open Data Plaza (서울 열린데이터광장) for urban problems (traffic, environment, welfare, safety)
+- Prefer fast iteration: small vertical slices, demo-ready UI, clear README for judges
+- Default stack unless specified: Next.js or Vite + React, TypeScript when possible
+- Keep secrets out of git; use `.env.example` for required env vars
+- Write in Korean for user-facing copy unless the product targets English users
+
+## Git branch workflow (3-person team)
+
+- `main`: demo/stable only. Merge from `dev` before final presentation.
+- `dev`: integration branch. All feature work lands here first.
+- Feature branches (one person each):
+  - `feat/ui` — frontend, pages, styling, demo UX
+  - `feat/api` — backend routes, server actions, auth
+  - `feat/data` — Seoul open data fetch, parsing, AI logic
+
+### Daily flow
+
+1. `git pull origin dev` before starting work
+2. Work on your `feat/*` branch only
+3. Commit often with small messages
+4. Merge your branch into `dev` when a slice works (avoid long-lived divergence)
+5. Do not commit directly to `main`
+
+### Conflict tips
+
+- Split by folder when possible: `app/`, `components/`, `lib/`, `api/`
+- Whoever touches shared files (`package.json`, root config) coordinates in chat first
