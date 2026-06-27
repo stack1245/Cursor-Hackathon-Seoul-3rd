@@ -95,3 +95,8 @@ export interface OnboardingDashboard {
   coreFiles: CoreFile[];
   architecture: ArchitectureNode[];
 }
+
+export interface SuggestedQuestionsResponse {
+  questions: string[];
+  source: "gemini" | "fallback";
+}

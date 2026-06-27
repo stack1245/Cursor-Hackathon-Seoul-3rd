@@ -3,7 +3,16 @@ import { queryMockRag } from "@/lib/mock-rag";
 
 export async function POST(request: Request) {
   try {
-    const body = (await request.json()) as { question?: string };
+    const body = (await request
+      .json()
+      .catch(() => null)) as { question?: string } | null;
+    if (!body) {
+      return NextResponse.json(
+        { message: "Invalid JSON body" },
+        { status: 400 },
+      );
+    }
+
     const { question } = body;
 
     if (!question || typeof question !== "string") {

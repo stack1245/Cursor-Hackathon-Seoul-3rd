@@ -8,19 +8,13 @@ import type {
   CodeLine,
   OnboardingDashboard,
   RagAnswer,
+  RepositoryAnalysis,
+  SuggestedQuestionsResponse,
 } from "@/types/hermes";
 
 const navItems = [
   { id: "dashboard", label: "Workspace", icon: DashboardIcon, active: true },
   { id: "settings", label: "Settings", icon: SettingsIcon },
-];
-
-const DEMO_QUESTIONS = [
-  "결제 검증 로직은 어디서 처리하나요?",
-  "2025년 10월 PG 장애 때문에 추가된 코드는 어디인가요?",
-  "왜 payment.service.ts가 위험 파일인가요?",
-  "신입 개발자가 제일 먼저 봐야 할 파일은 뭐예요?",
-  "이 프로젝트의 전체 아키텍처 흐름을 설명해줘",
 ];
 
 const PAYMENT_FILE_PATH = "src/services/payment.service.ts";
@@ -49,6 +43,20 @@ function getCodeLinesForFile(filePath: string): CodeLine[] {
   return file?.lines ?? paymentFile?.lines ?? [];
 }
 
+function riskScoreToWidthClass(score: number): string {
+  if (score >= 95) return "w-[95%]";
+  if (score >= 90) return "w-[90%]";
+  if (score >= 80) return "w-[80%]";
+  if (score >= 70) return "w-[70%]";
+  if (score >= 60) return "w-[60%]";
+  if (score >= 50) return "w-1/2";
+  if (score >= 40) return "w-[40%]";
+  if (score >= 30) return "w-[30%]";
+  if (score >= 20) return "w-[20%]";
+  if (score >= 10) return "w-[10%]";
+  return "w-[4%]";
+}
+
 export default function WorkspacePage() {
   const [activeNav, setActiveNav] = useState("dashboard");
   const [question, setQuestion] = useState("");
@@ -60,14 +68,21 @@ export default function WorkspacePage() {
     useState<OnboardingDashboard | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [analysisStatus, setAnalysisStatus] = useState<string | null>(null);
+  const [analysisError, setAnalysisError] = useState<string | null>(null);
+  const [analysisResult, setAnalysisResult] = useState<RepositoryAnalysis | null>(
+    null,
+  );
+  const [suggestedQuestions, setSuggestedQuestions] = useState<string[]>([]);
+  const [isGeneratingQuestions, setIsGeneratingQuestions] = useState(false);
   const [repositoryUrl, setRepositoryUrl] = useState(
-    "https://github.com/team/project-hermes",
+    "https://github.com/stack1245/Cursor-Hackathon-Seoul-3rd",
   );
   const [isAnalyzing, setIsAnalyzing] = useState(false);
 
   const lineRefs = useRef<Record<number, HTMLDivElement | null>>({});
   const codeContainerRef = useRef<HTMLDivElement | null>(null);
   const chatEndRef = useRef<HTMLDivElement | null>(null);
+  const hasLoadedInitialQuestionsRef = useRef(false);
 
   const codeLines = getCodeLinesForFile(highlightedFilePath);
 
@@ -99,9 +114,42 @@ export default function WorkspacePage() {
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, isLoading]);
 
+  const loadSuggestedQuestions = useCallback(
+    async (params: { repositoryUrl: string; repositoryName?: string }) => {
+      setIsGeneratingQuestions(true);
+      try {
+        const response = await fetch("/api/workspace/questions", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            repositoryUrl: params.repositoryUrl,
+            repositoryName: params.repositoryName,
+          }),
+        });
+        if (!response.ok) {
+          throw new Error("Failed to generate suggested questions");
+        }
+        const data = (await response.json()) as SuggestedQuestionsResponse;
+        setSuggestedQuestions(data.questions);
+      } catch (error) {
+        console.error("Failed to generate suggested questions:", error);
+      } finally {
+        setIsGeneratingQuestions(false);
+      }
+    },
+    [],
+  );
+
+  useEffect(() => {
+    if (hasLoadedInitialQuestionsRef.current) return;
+    hasLoadedInitialQuestionsRef.current = true;
+    loadSuggestedQuestions({ repositoryUrl });
+  }, [loadSuggestedQuestions, repositoryUrl]);
+
   const handleAnalyze = useCallback(async () => {
     setIsAnalyzing(true);
     setAnalysisStatus(null);
+    setAnalysisError(null);
     try {
       const response = await fetch("/api/repository/analyze", {
         method: "POST",
@@ -109,18 +157,36 @@ export default function WorkspacePage() {
         body: JSON.stringify({ repositoryUrl }),
       });
       if (!response.ok) {
-        throw new Error("Failed to analyze repository");
+        const errorData = (await response.json().catch(() => null)) as
+          | { message?: string }
+          | null;
+        throw new Error(
+          errorData?.message ?? "GitHub 저장소 분석 요청에 실패했습니다.",
+        );
       }
-      await response.json();
+      const data = (await response.json()) as RepositoryAnalysis & {
+        message?: string;
+      };
+      setAnalysisResult(data);
+      loadSuggestedQuestions({
+        repositoryUrl: data.repositoryUrl,
+        repositoryName: data.repositoryName,
+      });
       setAnalysisStatus(
-        "분석 완료: Git commit, PR, 리뷰 댓글, 인수인계 문서 기반 Mock Context 생성 완료",
+        data.message ??
+          `분석 완료: ${data.repositoryName} (파일 ${data.totalFiles.toLocaleString()}개, 커밋 ${data.totalCommits.toLocaleString()}개, PR ${data.totalPullRequests.toLocaleString()}개)`,
       );
     } catch (error) {
       console.error("Failed to analyze repository:", error);
+      setAnalysisError(
+        error instanceof Error
+          ? error.message
+          : "분석 중 알 수 없는 오류가 발생했습니다.",
+      );
     } finally {
       setIsAnalyzing(false);
     }
-  }, [repositoryUrl]);
+  }, [loadSuggestedQuestions, repositoryUrl]);
 
   const submitQuestion = useCallback(
     async (inputQuestion: string) => {
@@ -188,6 +254,7 @@ export default function WorkspacePage() {
   const hotSpotFiles = onboardingDashboard?.hotSpotFiles ?? [];
   const coreFiles = onboardingDashboard?.coreFiles ?? [];
   const architecture = onboardingDashboard?.architecture ?? [];
+  const hasConversationStarted = messages.length > 0 || isLoading;
 
   return (
     <div className="flex h-screen w-full overflow-hidden bg-[#0e1117] text-zinc-100 font-sans">
@@ -270,20 +337,32 @@ export default function WorkspacePage() {
             {analysisStatus && (
               <span className="text-[11px] text-green-400">{analysisStatus}</span>
             )}
+            {analysisError && (
+              <span className="text-[11px] text-red-400">{analysisError}</span>
+            )}
           </div>
+          {analysisResult && (
+            <div className="mt-2 rounded-lg border border-white/10 bg-white/[0.04] px-3 py-2">
+              <p className="text-[11px] text-zinc-300">{analysisResult.summary}</p>
+              <p className="mt-1 text-[10px] text-zinc-500">
+                분석 대상: {analysisResult.repositoryName} ·{" "}
+                {new Date(analysisResult.analyzedAt).toLocaleString("ko-KR")}
+              </p>
+            </div>
+          )}
         </header>
 
         {/* Scrollable body */}
         <div className="flex-1 overflow-y-auto">
           {/* Code viewer + Chat panel */}
-          <div className="flex h-[420px] border-b border-white/10">
+          <div className="flex h-[520px] border-b border-white/10">
             {/* Code & Context Viewer (60%) */}
-            <div className="flex w-[60%] flex-col border-r border-white/10">
+            <div className="flex w-[53%] flex-col border-r border-white/10">
               <div className="flex items-center justify-between border-b border-white/10 px-4 py-2 bg-[#0d0f15]">
                 <span className="text-xs font-semibold tracking-widest text-zinc-300 uppercase">
                   Code &amp; Context Viewer
                 </span>
-                <span className="text-xs text-zinc-500">LEFT PANE (60%)</span>
+                <span className="text-xs text-zinc-500">LEFT PANE (53%)</span>
               </div>
 
               {/* File tab */}
@@ -334,84 +413,90 @@ export default function WorkspacePage() {
               </div>
             </div>
 
-            {/* AI Chat & History (40%) */}
-            <div className="flex w-[40%] flex-col">
+            {/* AI Chat & History (47%) */}
+            <div className="flex w-[47%] flex-col">
               <div className="flex items-center justify-between border-b border-white/10 px-4 py-2 bg-[#0d0f15]">
-                <span className="text-xs font-semibold tracking-widest text-zinc-300 uppercase">
+                <span className="text-sm font-semibold tracking-widest text-zinc-200 uppercase">
                   AI Chat &amp; History
                 </span>
-                <span className="text-xs text-zinc-500">RIGHT PANE (40%)</span>
+                <span className="text-xs text-zinc-500">RIGHT PANE (47%)</span>
               </div>
 
               {/* Persona tag */}
               <div className="border-b border-white/10 bg-[#0d0f15] px-4 py-2">
-                <div className="flex items-center gap-2">
-                  <div className="h-6 w-6 rounded-full bg-zinc-600 flex items-center justify-center text-[10px] font-bold text-white">
+                <div className="flex items-center gap-2.5">
+                  <div className="h-8 w-8 rounded-full bg-zinc-600 flex items-center justify-center text-xs font-bold text-white">
                     A
                   </div>
                   <div>
-                    <p className="text-xs font-semibold text-zinc-200">
+                    <p className="text-sm font-semibold text-zinc-100">
                       Persona: &apos;A (Lead Dev)&apos;
                     </p>
-                    <p className="text-[10px] text-green-400">● Available</p>
+                    <p className="text-xs text-green-400">● Available</p>
                   </div>
                 </div>
               </div>
 
               {/* Chat label */}
               <div className="border-b border-white/10 px-4 py-1.5 bg-[#0d0f15]">
-                <span className="text-[10px] font-semibold tracking-widest text-zinc-500 uppercase">
+                <span className="text-xs font-semibold tracking-widest text-zinc-400 uppercase">
                   Chat History
                 </span>
               </div>
 
               {/* Messages */}
-              <div className="flex-1 overflow-y-auto space-y-3 px-4 py-3 bg-[#090b0f]">
+              <div className="flex-1 overflow-y-auto space-y-4 px-4 py-4 bg-[#090b0f]">
                 {messages.length === 0 && (
-                  <p className="text-[11px] text-zinc-500 leading-relaxed">
+                  <p className="text-sm text-zinc-400 leading-relaxed">
                     AI 사수에게 결제, PG 장애, 위험 파일, 아키텍처에 대해 질문해
                     보세요.
                   </p>
                 )}
                 {messages.map((msg) => (
-                  <div key={msg.id} className="flex gap-2">
+                  <div key={msg.id} className="flex gap-3">
                     <div
-                      className={`h-6 w-6 flex-shrink-0 rounded-full flex items-center justify-center text-[10px] font-bold text-white ${
+                      className={`h-8 w-8 flex-shrink-0 rounded-full flex items-center justify-center text-xs font-bold text-white ${
                         msg.role === "assistant" ? "bg-zinc-600" : "bg-blue-700"
                       }`}
                     >
                       {msg.role === "assistant" ? "A" : "B"}
                     </div>
                     <div className="flex-1 min-w-0">
-                      <div className="flex items-baseline gap-2 mb-0.5">
-                        <span className="text-xs font-semibold text-zinc-200">
+                      <div className="flex items-baseline gap-2 mb-1">
+                        <span className="text-sm font-semibold text-zinc-100">
                           {msg.role === "assistant" ? "A" : "Ben"}
                         </span>
-                        <span className="text-[10px] text-zinc-500">
+                        <span className="text-xs text-zinc-500">
                           {formatTime(new Date())}
                         </span>
                       </div>
-                      <p className="text-xs text-zinc-300 leading-relaxed whitespace-pre-wrap">
+                      <p
+                        className={`whitespace-pre-wrap rounded-xl border px-3 py-2.5 text-sm leading-7 ${
+                          msg.role === "assistant"
+                            ? "border-white/10 bg-white/[0.04] text-zinc-100"
+                            : "border-blue-300/20 bg-blue-500/10 text-zinc-100"
+                        }`}
+                      >
                         {msg.content}
                       </p>
                       {msg.sources && msg.sources.length > 0 && (
-                        <div className="mt-2 space-y-1.5">
+                        <div className="mt-2.5 space-y-2">
                           {msg.sources.map((source, index) => (
                             <div
                               key={`${msg.id}-source-${index}`}
-                              className="rounded border border-white/10 bg-white/5 p-2"
+                              className="rounded-lg border border-white/10 bg-white/[0.04] p-2.5"
                             >
-                              <p className="text-[9px] font-semibold uppercase tracking-wider text-yellow-400/90">
+                              <p className="text-[10px] font-semibold uppercase tracking-wider text-yellow-300/90">
                                 {source.type}
                               </p>
-                              <p className="text-[10px] font-semibold text-zinc-200 mt-0.5">
+                              <p className="text-xs font-semibold text-zinc-100 mt-1">
                                 {source.title}
                               </p>
-                              <p className="text-[10px] text-zinc-400 mt-0.5 leading-relaxed">
+                              <p className="text-xs text-zinc-300 mt-1 leading-relaxed">
                                 {source.summary}
                               </p>
                               {source.filePath && (
-                                <p className="text-[9px] text-zinc-500 font-mono mt-1">
+                                <p className="text-[10px] text-zinc-500 font-mono mt-1.5">
                                   {source.filePath}
                                 </p>
                               )}
@@ -423,47 +508,55 @@ export default function WorkspacePage() {
                     {msg.role === "assistant" && (
                       <button
                         type="button"
-                        className="flex-shrink-0 text-zinc-600 hover:text-zinc-400"
+                        aria-label="메시지 옵션 열기"
+                        title="메시지 옵션"
+                        className="flex-shrink-0 rounded p-1 text-zinc-500 hover:bg-white/5 hover:text-zinc-300"
                       >
-                        <span className="text-xs">⋯</span>
+                        <span className="text-sm">⋯</span>
                       </button>
                     )}
                   </div>
                 ))}
                 {isLoading && (
-                  <div className="flex gap-2">
-                    <div className="h-6 w-6 flex-shrink-0 rounded-full bg-zinc-600 flex items-center justify-center text-[10px] font-bold text-white">
+                  <div className="flex gap-3">
+                    <div className="h-8 w-8 flex-shrink-0 rounded-full bg-zinc-600 flex items-center justify-center text-xs font-bold text-white">
                       A
                     </div>
-                    <p className="text-xs text-zinc-500">답변 생성 중...</p>
+                    <p className="text-sm text-zinc-400">답변 생성 중...</p>
                   </div>
                 )}
                 <div ref={chatEndRef} />
               </div>
 
-              {/* Demo questions */}
-              <div className="border-t border-white/10 px-4 py-2 bg-[#0d0f15]">
-                <p className="mb-1.5 text-[9px] font-semibold uppercase tracking-wider text-zinc-500">
-                  시연 질문
-                </p>
-                <div className="flex flex-wrap gap-1.5">
-                  {DEMO_QUESTIONS.map((demoQuestion) => (
-                    <button
-                      key={demoQuestion}
-                      type="button"
-                      onClick={() => submitQuestion(demoQuestion)}
-                      disabled={isLoading}
-                      className="rounded-full border border-white/10 bg-white/5 px-2 py-1 text-[9px] text-zinc-400 transition-colors hover:border-white/20 hover:text-zinc-200 disabled:opacity-50"
-                    >
-                      {demoQuestion}
-                    </button>
-                  ))}
+              {!hasConversationStarted && (
+                <div className="border-t border-white/10 px-4 py-2.5 bg-[#0d0f15]">
+                  <p className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-zinc-400">
+                    시연 질문
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    {suggestedQuestions.map((demoQuestion) => (
+                      <button
+                        key={demoQuestion}
+                        type="button"
+                        onClick={() => submitQuestion(demoQuestion)}
+                        disabled={isLoading}
+                        className="rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-xs text-zinc-300 transition-colors hover:border-white/20 hover:text-zinc-100 disabled:opacity-50"
+                      >
+                        {demoQuestion}
+                      </button>
+                    ))}
+                    {isGeneratingQuestions && (
+                      <span className="text-xs text-zinc-500">
+                        질문 생성 중...
+                      </span>
+                    )}
+                  </div>
                 </div>
-              </div>
+              )}
 
               {/* Chat input */}
               <div className="border-t border-white/10 px-4 py-3 bg-[#0d0f15]">
-                <div className="flex items-center gap-2 rounded-lg border border-white/15 bg-white/5 px-3 py-2">
+                <div className="flex items-center gap-2 rounded-lg border border-white/15 bg-white/5 px-3 py-2.5">
                   <input
                     type="text"
                     value={question}
@@ -473,15 +566,17 @@ export default function WorkspacePage() {
                     }}
                     placeholder="AI 사수에게 질문하세요..."
                     disabled={isLoading}
-                    className="flex-1 bg-transparent text-xs text-zinc-300 placeholder-zinc-600 outline-none disabled:opacity-50"
+                    className="flex-1 bg-transparent text-sm text-zinc-200 placeholder-zinc-500 outline-none disabled:opacity-50"
                   />
                   <button
                     type="button"
                     onClick={handleSend}
                     disabled={isLoading || !question.trim()}
-                    className="text-zinc-500 hover:text-zinc-300 transition-colors disabled:opacity-50"
+                    aria-label="질문 전송"
+                    title="질문 전송"
+                    className="text-zinc-400 hover:text-zinc-200 transition-colors disabled:opacity-50"
                   >
-                    <SendIcon className="h-3.5 w-3.5" />
+                    <SendIcon className="h-4.5 w-4.5" />
                   </button>
                 </div>
               </div>
@@ -541,8 +636,7 @@ export default function WorkspacePage() {
                           <div
                             className={`h-full rounded-full ${
                               isHighRisk ? "bg-red-500" : "bg-yellow-500"
-                            }`}
-                            style={{ width: `${Math.min(file.riskScore, 100)}%` }}
+                            } ${riskScoreToWidthClass(file.riskScore)}`}
                           />
                         </div>
                         <p className="mt-1 text-[9px] text-zinc-500 line-clamp-2">
